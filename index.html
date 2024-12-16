@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cleaning Schedule Generator</title>
+    <link href="style.css" rel="stylesheet">
+    <!-- Include the shadcn base styles -->
+    <link href="https://cdn.jsdelivr.net/npm/@unocss/reset/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto p-4">
+        <div class="flex gap-4 flex-col">
+            <div id="alertContainer"></div>
+            
+            <div class="flex gap-4">
+                <!-- History Panel -->
+                <div class="w-1/3 bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold mb-4">Rotation History</h3>
+                    <div id="historyList" class="max-h-96 overflow-y-auto"></div>
+                </div>
+
+                <!-- Main Schedule Panel -->
+                <div class="w-2/3 bg-white rounded-lg shadow-sm p-6">
+                    <div class="mb-4 flex gap-4 items-center">
+                        <input 
+                            type="date" 
+                            id="startDate" 
+                            class="px-4 py-2 border rounded-md"
+                        >
+                        <button 
+                            id="generateBtn"
+                            class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+                        >
+                            Generate New Schedule
+                        </button>
+                        <button 
+                            id="resetBtn"
+                            class="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+                        >
+                            Reset Rotation
+                        </button>
+                    </div>
+
+                    <div id="scheduleContainer"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class CleaningSchedule {
+            constructor() {
+                this.initializeElements();
+                this.loadSavedData();
+                this.setupEventListeners();
+                this.renderHistory();
+                this.renderLatestSchedule();
+            }
+
+            initializeElements() {
+                this.startDateInput = document.getElementById('startDate');
+                this.generateBtn = document.getElementById('generateBtn');
+                this.resetBtn = document.getElementById('resetBtn');
+                this.historyList = document.getElementById('historyList');
+                this.scheduleContainer = document.getElementById('scheduleContainer');
+                this.alertContainer = document.getElementById('alertContainer');
+                
+                // Set today's date as default
+                this.startDateInput.value = new Date().toISOString().split('T')[0];
+            }
+
+            loadSavedData() {
+                this.rotationCount = parseInt(localStorage.getItem('rotationCount')) || 1;
+                this.history = JSON.parse(localStorage.getItem('scheduleHistory')) || [];
+            }
+
+            setupEventListeners() {
+                this.generateBtn.addEventListener('click', () => this.generateSchedule());
+                this.resetBtn.addEventListener('click', () => this.resetRotation());
+            }
+
+            showAlert(message, type = 'info') {
+                this.alertContainer.innerHTML = `
+                    <div class="p-4 mb-4 rounded-md ${type === 'error' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}">
+                        ${message}
+                    </div>
+                `;
+                setTimeout(() => this.alertContainer.innerHTML = '', 3000);
+            }
+
+            generatePairs() {
+                return [
+                    ['Bilal', 'Suko'], ['Prasad', 'Sadik'],
+                    ['Anmol', 'Bilal'], ['Suko', 'Prasad'],
+                    ['Sadik', 'Anmol'], ['Bilal', 'Suko'],
+                    ['Prasad', 'Sadik'], ['Anmol', 'Bilal'],
+                    ['Suko', 'Prasad'], ['Sadik', 'Anmol']
+                ];
+            }
+
+            generateDates(startDate) {
+                const dates = [];
+                let currentDate = new Date(startDate);
+                
+                // Adjust to start from Monday
+                while (currentDate.getDay() !== 1) {
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+
+                for (let week = 0; week < 5; week++) {
+                    // Monday
+                    dates.push(new Date(currentDate));
+                    // Thursday
+                    let thursday = new Date(currentDate);
+                    thursday.setDate(thursday.getDate() + 3);
+                    dates.push(thursday);
+                    // Next week
+                    currentDate.setDate(currentDate.getDate() + 7);
+                }
+                
+                return dates;
+            }
+
+            formatDate(date) {
+                return new Date(date).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+            }
+
+            generateSchedule() {
+                const startDate = new Date(this.startDateInput.value);
+                const pairs = this.generatePairs();
+                const dates = this.generateDates(startDate);
+                
+                const scheduleData = dates.map((date, index) => ({
+                    week: `Week ${Math.floor(index/2) + 1}`,
+                    date: this.formatDate(date),
+                    day: date.toLocaleDateString('en-US', { weekday: 'long' }),
+                    cleaningPair: pairs[index].join(' + '),
+                    done: '',
+                    cleaningTime: ''
+                }));
+
+                const newRotation = {
+                    id: this.rotationCount,
+                    startDate: startDate.toISOString(),
+                    createdAt: new Date().toISOString(),
+                    schedule: scheduleData
+                };
+
+                this.history.push(newRotation);
+                this.rotationCount++;
+                
+                this.saveData();
+                this.renderHistory();
+                this.renderLatestSchedule();
+                this.showAlert('New schedule generated successfully!');
+            }
+
+            renderHistory() {
+                this.historyList.innerHTML = this.history.map(rotation => `
+                    <div class="mb-2 p-2 border rounded">
+                        <div>Rotation #${String(rotation.id).padStart(4, '0')}</div>
+                        <div class="text-sm text-gray-600">
+                            Start: ${this.formatDate(rotation.startDate)}
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            renderLatestSchedule() {
+                if (this.history.length === 0) return;
+
+                const latest = this.history[this.history.length - 1];
+                this.scheduleContainer.innerHTML = `
+                    <h2 class="text-2xl font-bold text-center mb-4">CLEANING SCHEDULE</h2>
+                    <h3 class="text-xl mb-2">GLOBAL HARDWARE</h3>
+                    <div class="flex justify-between mb-4">
+                        <div>Rotation count: #${String(latest.id).padStart(4, '0')}</div>
+                        <div>Rotation date: ${this.formatDate(latest.startDate)}</div>
+                    </div>
+                    
+                    <table class="w-full border-collapse">
+                        <thead>
+                            <tr class="bg-gray-100">
+                                <th class="border p-2">Week</th>
+                                <th class="border p-2">Date</th>
+                                <th class="border p-2">Day</th>
+                                <th class="border p-2">Cleaning pair</th>
+                                <th class="border p-2">Done</th>
+                                <th class="border p-2">Cleaning time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${latest.schedule.map((row, index) => `
+                                <tr class="${Math.floor(index/2) % 2 === 0 ? 'bg-white' : 'bg-gray-100'}">
+                                    <td class="border p-2">${row.week}</td>
+                                    <td class="border p-2">${row.date}</td>
+                                    <td class="border p-2">${row.day}</td>
+                                    <td class="border p-2">${row.cleaningPair}</td>
+                                    <td class="border p-2">${row.done}</td>
+                                    <td class="border p-2">${row.cleaningTime}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            }
+
+            resetRotation() {
+                if (confirm('Are you sure you want to reset rotation count? This will clear all history.')) {
+                    this.rotationCount = 1;
+                    this.history = [];
+                    this.saveData();
+                    this.renderHistory();
+                    this.scheduleContainer.innerHTML = '';
+                    this.showAlert('Rotation count reset to 1 and history cleared.');
+                }
+            }
+
+            saveData() {
+                localStorage.setItem('rotationCount', this.rotationCount);
+                localStorage.setItem('scheduleHistory', JSON.stringify(this.history));
+            }
+        }
+
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', () => {
+            new CleaningSchedule();
+        });
+    </script>
+</body>
+</html>
