@@ -247,9 +247,32 @@
             // [Previous methods remain the same: generatePairs, generateDates, formatDate]
 
             generateSchedule() {
-                // [Previous generateSchedule code remains the same]
-                // After generating:
-                this.renderCurrentView();
+                const startDate = new Date(this.startDateInput.value);
+                const pairs = this.generatePairs();
+                const dates = this.generateDates(startDate);
+                
+                const scheduleData = dates.map((date, index) => ({
+                    week: `Week ${Math.floor(index/2) + 1}`,
+                    date: this.formatDate(date),
+                    day: date.toLocaleDateString('en-US', { weekday: 'long' }),
+                    cleaningPair: pairs[index].join(' + '),
+                    done: '',
+                    cleaningTime: ''
+                }));
+
+                const newRotation = {
+                    id: this.rotationCount,
+                    startDate: startDate.toISOString(),
+                    createdAt: new Date().toISOString(),
+                    schedule: scheduleData
+                };
+
+                this.history.push(newRotation);
+                this.rotationCount++;
+                
+                this.saveData();
+                this.renderSchedule(newRotation);  // This line was missing
+                console.log('Generated new schedule:', newRotation);  // Add this for debugging
             }
 
             renderHistory() {
